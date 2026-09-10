@@ -1,0 +1,30 @@
+name: Fix GET_CONTENT file picker
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-getcontent-picker.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch director file picker
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/main/java/com/profecuaderno/director/DirectorDocumentLibrary.kt')
+          s=p.read_text()
+          s=s.replace('ActivityResultContracts.OpenDocument()', 'ActivityResultContracts.GetContent()')
+          s=s.replace('picker.launch(directorDocumentMimeTypes)', 'picker.launch("*/*")')
+          s=s.replace('runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }\n            ', '')
+          p.write_text(s)
+          PY
+      - name: Commit fixes
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/profecuaderno/director/DirectorDocumentLibrary.kt
+          git diff --cached --quiet || git commit -m "Use compatible file picker without storage permission"
+          git push
