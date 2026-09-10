@@ -32,11 +32,36 @@ fun DirectorApp() {
         Scaffold(
             bottomBar = {
                 NavigationBar {
-                    NavigationBarItem(section == DirectorSection.HOME, { section = DirectorSection.HOME }, { Icon(Icons.Default.Home, null) }, { Text("Inicio") })
-                    NavigationBarItem(section == DirectorSection.TEACHERS, { section = DirectorSection.TEACHERS }, { Icon(Icons.Default.Badge, null) }, { Text("Docentes") })
-                    NavigationBarItem(section == DirectorSection.SCHEDULES, { section = DirectorSection.SCHEDULES }, { Icon(Icons.Default.CalendarMonth, null) }, { Text("Horarios") })
-                    NavigationBarItem(section == DirectorSection.NOTICES, { section = DirectorSection.NOTICES }, { Icon(Icons.Default.Notifications, null) }, { Text("Avisos") })
-                    NavigationBarItem(section == DirectorSection.MORE, { section = DirectorSection.MORE }, { Icon(Icons.Default.MoreHoriz, null) }, { Text("Más") })
+                    NavigationBarItem(
+                        selected = section == DirectorSection.HOME,
+                        onClick = { section = DirectorSection.HOME },
+                        icon = { Icon(Icons.Default.Home, contentDescription = null) },
+                        label = { Text("Inicio") }
+                    )
+                    NavigationBarItem(
+                        selected = section == DirectorSection.TEACHERS,
+                        onClick = { section = DirectorSection.TEACHERS },
+                        icon = { Icon(Icons.Default.Badge, contentDescription = null) },
+                        label = { Text("Docentes") }
+                    )
+                    NavigationBarItem(
+                        selected = section == DirectorSection.SCHEDULES,
+                        onClick = { section = DirectorSection.SCHEDULES },
+                        icon = { Icon(Icons.Default.CalendarMonth, contentDescription = null) },
+                        label = { Text("Horarios") }
+                    )
+                    NavigationBarItem(
+                        selected = section == DirectorSection.NOTICES,
+                        onClick = { section = DirectorSection.NOTICES },
+                        icon = { Icon(Icons.Default.Notifications, contentDescription = null) },
+                        label = { Text("Avisos") }
+                    )
+                    NavigationBarItem(
+                        selected = section == DirectorSection.MORE,
+                        onClick = { section = DirectorSection.MORE },
+                        icon = { Icon(Icons.Default.MoreHoriz, contentDescription = null) },
+                        label = { Text("Más") }
+                    )
                 }
             }
         ) { padding ->
@@ -76,7 +101,7 @@ private fun DashboardScreen() {
                     row.forEach { (value, label, icon) ->
                         ElevatedCard(Modifier.weight(1f)) {
                             Column(Modifier.padding(14.dp)) {
-                                Icon(icon, null)
+                                Icon(icon, contentDescription = null)
                                 Spacer(Modifier.height(8.dp))
                                 Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                                 Text(label)
@@ -117,7 +142,7 @@ private fun MoreScreen() {
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(options[index], modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.ChevronRight, null)
+                    Icon(Icons.Default.ChevronRight, contentDescription = null)
                 }
             }
         }
