@@ -19,20 +19,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("director_ui", MODE_PRIVATE)
         setContent {
+            val appLanguage = remember { AppLanguagePrefs.load(this@MainActivity) }
             var theme by remember {
                 mutableStateOf(
                     AgendaThemeStyle.entries.firstOrNull { it.key == prefs.getString("theme", null) }
                         ?: AgendaThemeStyle.MINT_LAVENDER
                 )
             }
-            DirectorTheme(theme) {
-                DirectorApp(
-                    currentTheme = theme,
-                    onThemeChange = {
-                        theme = it
-                        prefs.edit().putString("theme", it.key).apply()
-                    }
-                )
+            CompositionLocalProvider(LocalAppLanguage provides appLanguage) {
+                DirectorTheme(theme) {
+                    DirectorApp(
+                        currentTheme = theme,
+                        onThemeChange = {
+                            theme = it
+                            prefs.edit().putString("theme", it.key).apply()
+                        }
+                    )
+                }
             }
         }
     }
@@ -42,6 +45,7 @@ enum class DirectorSection { HOME, TEACHERS, SCHEDULES, NOTICES, MORE }
 
 @Composable
 fun DirectorApp(currentTheme: AgendaThemeStyle, onThemeChange: (AgendaThemeStyle) -> Unit) {
+    val language = LocalAppLanguage.current
     var section by remember { mutableStateOf(DirectorSection.HOME) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -50,10 +54,10 @@ fun DirectorApp(currentTheme: AgendaThemeStyle, onThemeChange: (AgendaThemeStyle
             if (expandedNavigation) {
                 NavigationRail {
                     Spacer(Modifier.height(8.dp))
-                    NavigationRailItem(section == DirectorSection.HOME, { section = DirectorSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") })
-                    NavigationRailItem(section == DirectorSection.TEACHERS, { section = DirectorSection.TEACHERS }, { Icon(Icons.Default.Badge, null) }, label = { Text("Docentes") })
-                    NavigationRailItem(section == DirectorSection.SCHEDULES, { section = DirectorSection.SCHEDULES }, { Icon(Icons.Default.CalendarMonth, null) }, label = { Text("Horarios") })
-                    NavigationRailItem(section == DirectorSection.NOTICES, { section = DirectorSection.NOTICES }, { Icon(Icons.Default.Notifications, null) }, label = { Text("Avisos") })
+                    NavigationRailItem(section == DirectorSection.HOME, { section = DirectorSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text(language.text("Inicio", "Home")) })
+                    NavigationRailItem(section == DirectorSection.TEACHERS, { section = DirectorSection.TEACHERS }, { Icon(Icons.Default.Badge, null) }, label = { Text(language.text("Docentes", "Teachers")) })
+                    NavigationRailItem(section == DirectorSection.SCHEDULES, { section = DirectorSection.SCHEDULES }, { Icon(Icons.Default.CalendarMonth, null) }, label = { Text(language.text("Horarios", "Schedules")) })
+                    NavigationRailItem(section == DirectorSection.NOTICES, { section = DirectorSection.NOTICES }, { Icon(Icons.Default.Notifications, null) }, label = { Text(language.text("Avisos", "Notices")) })
                     NavigationRailItem(section == DirectorSection.MORE, { section = DirectorSection.MORE }, { Icon(Icons.Default.MoreHoriz, null) }, label = { Text("Más") })
                 }
             }
@@ -64,10 +68,10 @@ fun DirectorApp(currentTheme: AgendaThemeStyle, onThemeChange: (AgendaThemeStyle
                 bottomBar = {
                     if (!expandedNavigation) {
                         NavigationBar {
-                            NavigationBarItem(section == DirectorSection.HOME, { section = DirectorSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") })
-                            NavigationBarItem(section == DirectorSection.TEACHERS, { section = DirectorSection.TEACHERS }, { Icon(Icons.Default.Badge, null) }, label = { Text("Docentes") })
-                            NavigationBarItem(section == DirectorSection.SCHEDULES, { section = DirectorSection.SCHEDULES }, { Icon(Icons.Default.CalendarMonth, null) }, label = { Text("Horarios") })
-                            NavigationBarItem(section == DirectorSection.NOTICES, { section = DirectorSection.NOTICES }, { Icon(Icons.Default.Notifications, null) }, label = { Text("Avisos") })
+                            NavigationBarItem(section == DirectorSection.HOME, { section = DirectorSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text(language.text("Inicio", "Home")) })
+                            NavigationBarItem(section == DirectorSection.TEACHERS, { section = DirectorSection.TEACHERS }, { Icon(Icons.Default.Badge, null) }, label = { Text(language.text("Docentes", "Teachers")) })
+                            NavigationBarItem(section == DirectorSection.SCHEDULES, { section = DirectorSection.SCHEDULES }, { Icon(Icons.Default.CalendarMonth, null) }, label = { Text(language.text("Horarios", "Schedules")) })
+                            NavigationBarItem(section == DirectorSection.NOTICES, { section = DirectorSection.NOTICES }, { Icon(Icons.Default.Notifications, null) }, label = { Text(language.text("Avisos", "Notices")) })
                             NavigationBarItem(section == DirectorSection.MORE, { section = DirectorSection.MORE }, { Icon(Icons.Default.MoreHoriz, null) }, label = { Text("Más") })
                         }
                     }
@@ -279,8 +283,32 @@ private fun DirectorNoticesScreen() {
 
 @Composable
 private fun MoreScreen(currentTheme: AgendaThemeStyle, onThemeChange: (AgendaThemeStyle) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val language = LocalAppLanguage.current
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { Text("Más", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
+        item { Text(language.text("Más", "More"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
+        item {
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(language.text("Idioma", "Language"), fontWeight = FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppLanguage.entries.forEach { item ->
+                            FilterChip(
+                                selected = language == item,
+                                onClick = {
+                                    if (language != item) {
+                                        AppLanguagePrefs.save(context, item)
+                                        (context as? android.app.Activity)?.recreate()
+                                    }
+                                },
+                                label = { Text(item.label) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
         item { DirectorDocumentsCard() }
         item {
             ElevatedCard(Modifier.fillMaxWidth()) {
