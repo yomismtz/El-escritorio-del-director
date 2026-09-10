@@ -34,11 +34,10 @@ fun DirectorDocumentsCard() {
     var uriString by remember { mutableStateOf(prefs.getString("last_document_uri", null)) }
     var message by remember { mutableStateOf<String?>(null) }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) {
             message = "No se seleccionó ningún documento."
         } else {
-            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             val readable = runCatching { context.contentResolver.openInputStream(uri)?.use { it.read() } != null }.getOrDefault(false)
             if (readable) {
                 uriString = uri.toString()
@@ -57,7 +56,7 @@ fun DirectorDocumentsCard() {
                 Text("Documentos institucionales", style = MaterialTheme.typography.titleMedium)
             }
             Text("Admite PDF, CSV, XLS, XLSX, DOC, DOCX y TXT. Estos archivos no exponen alumnos individuales ni calificaciones.")
-            Button(onClick = { picker.launch(directorDocumentMimeTypes) }) {
+            Button(onClick = { picker.launch("*/*") }) {
                 Icon(Icons.Default.UploadFile, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(if (uriString == null) "Importar documento" else "Cambiar documento")
