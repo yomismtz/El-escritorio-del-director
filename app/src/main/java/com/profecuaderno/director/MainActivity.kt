@@ -234,6 +234,7 @@ private fun DirectorNoticesScreen() {
 private fun MoreScreen(currentTheme: AgendaThemeStyle, onThemeChange: (AgendaThemeStyle) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Text("Más", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
+        item { DirectorDocumentsCard() }
         item {
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
