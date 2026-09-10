@@ -1,0 +1,109 @@
+name: Apply responsive Director UI
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/apply-responsive-ui.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Adapt Director navigation and dashboard
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('app/src/main/java/com/profecuaderno/director/MainActivity.kt')
+          s = p.read_text()
+          pattern = re.compile(r'@Composable\nfun DirectorApp\(currentTheme: AgendaThemeStyle, onThemeChange: \(AgendaThemeStyle\) -> Unit\) \{.*?\n\}\n\n@Composable\nprivate fun DashboardScreen', re.S)
+          replacement = '''@Composable
+fun DirectorApp(currentTheme: AgendaThemeStyle, onThemeChange: (AgendaThemeStyle) -> Unit) {
+    var section by remember { mutableStateOf(DirectorSection.HOME) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val expanded = maxWidth >= 700.dp
+        Row(Modifier.fillMaxSize()) {
+            if (expanded) {
+                NavigationRail {
+                    Spacer(Modifier.height(8.dp))
+                    NavigationRailItem(section == DirectorSection.HOME, { section = DirectorSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") })
+                    NavigationRailItem(section == DirectorSection.TEACHERS, { section = DirectorSection.TEACHERS }, { Icon(Icons.Default.Badge, null) }, label = { Text("Docentes") })
+                    NavigationRailItem(section == DirectorSection.SCHEDULES, { section = DirectorSection.SCHEDULES }, { Icon(Icons.Default.CalendarMonth, null) }, label = { Text("Horarios") })
+                    NavigationRailItem(section == DirectorSection.NOTICES, { section = DirectorSection.NOTICES }, { Icon(Icons.Default.Notifications, null) }, label = { Text("Avisos") })
+                    NavigationRailItem(section == DirectorSection.MORE, { section = DirectorSection.MORE }, { Icon(Icons.Default.MoreHoriz, null) }, label = { Text("Más") })
+                }
+            }
+            Scaffold(
+                modifier = Modifier.weight(1f),
+                containerColor = MaterialTheme.colorScheme.background,
+                bottomBar = {
+                    if (!expanded) {
+                        NavigationBar {
+                            NavigationBarItem(section == DirectorSection.HOME, { section = DirectorSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") })
+                            NavigationBarItem(section == DirectorSection.TEACHERS, { section = DirectorSection.TEACHERS }, { Icon(Icons.Default.Badge, null) }, label = { Text("Docentes") })
+                            NavigationBarItem(section == DirectorSection.SCHEDULES, { section = DirectorSection.SCHEDULES }, { Icon(Icons.Default.CalendarMonth, null) }, label = { Text("Horarios") })
+                            NavigationBarItem(section == DirectorSection.NOTICES, { section = DirectorSection.NOTICES }, { Icon(Icons.Default.Notifications, null) }, label = { Text("Avisos") })
+                            NavigationBarItem(section == DirectorSection.MORE, { section = DirectorSection.MORE }, { Icon(Icons.Default.MoreHoriz, null) }, label = { Text("Más") })
+                        }
+                    }
+                }
+            ) { padding ->
+                Box(Modifier.padding(padding).fillMaxSize()) {
+                    when (section) {
+                        DirectorSection.HOME -> DashboardScreen()
+                        DirectorSection.TEACHERS -> TeachersScreen()
+                        DirectorSection.SCHEDULES -> ScheduleBuilderScreen()
+                        DirectorSection.NOTICES -> DirectorNoticesScreen()
+                        DirectorSection.MORE -> MoreScreen(currentTheme, onThemeChange)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardScreen'''
+          s2, n = pattern.subn(replacement, s)
+          if n != 1:
+              raise SystemExit(f'DirectorApp replacement count: {n}')
+          s2 = s2.replace('''        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MetricCard("15", "Docentes", Modifier.weight(1f))
+                MetricCard("8", "Grupos", Modifier.weight(1f))
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MetricCard("42", "Módulos", Modifier.weight(1f))
+                MetricCard("92%", "Cobertura", Modifier.weight(1f))
+            }
+        }''', '''        item {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val columns = if (maxWidth < 600.dp) 2 else 4
+                val metrics = listOf("15" to "Docentes", "8" to "Grupos", "42" to "Módulos", "92%" to "Cobertura")
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    metrics.chunked(columns).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            row.forEach { (value, label) -> MetricCard(value, label, Modifier.weight(1f)) }
+                            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
+            }
+        }''')
+          p.write_text(s2)
+          PY
+      - name: Commit responsive Director UI
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/profecuaderno/director/MainActivity.kt
+          git diff --cached --quiet || git commit -m "Adapt Director interface for phones tablets and rotation"
+          git push
