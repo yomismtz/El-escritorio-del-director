@@ -43,7 +43,7 @@ fun DirectorDocumentsCard() {
             if (readable) {
                 uriString = uri.toString()
                 prefs.edit().putString("last_document_uri", uri.toString()).apply()
-                message = "Documento institucional guardado en este dispositivo."
+                message = "Documento institucional guardado correctamente en este dispositivo."
             } else {
                 message = "No se pudo leer el archivo seleccionado."
             }
