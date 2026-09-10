@@ -44,6 +44,27 @@ data class Subject(
     val moduleMinutes: Int
 )
 
+data class TeacherAvailability(
+    val localId: Long,
+    val syncId: String,
+    val institutionId: String,
+    val teacherId: String,
+    val dayOfWeek: Int,
+    val startMinutes: Int,
+    val endMinutes: Int
+)
+
+data class TeachingRequirement(
+    val localId: Long,
+    val syncId: String,
+    val institutionId: String,
+    val schoolYearId: String,
+    val groupId: String,
+    val subjectId: String,
+    val weeklyModules: Int,
+    val moduleMinutes: Int
+)
+
 data class ScheduleBlock(
     val localId: Long,
     val syncId: String,
@@ -54,4 +75,23 @@ data class ScheduleBlock(
     val dayOfWeek: Int,
     val startMinutes: Int,
     val endMinutes: Int
+)
+
+enum class NoticeAudience {
+    TEACHERS,
+    STUDENTS,
+    TEACHERS_AND_STUDENTS
+}
+
+data class InstitutionalNotice(
+    val localId: Long,
+    val syncId: String,
+    val institutionId: String,
+    val schoolYearId: String,
+    val title: String,
+    val body: String,
+    val audience: NoticeAudience,
+    val publishedAt: Long,
+    val expiresAt: Long? = null,
+    val syncStatus: String = "LOCAL_ONLY"
 )
