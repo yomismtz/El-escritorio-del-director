@@ -43,25 +43,47 @@ enum class DirectorSection { HOME, TEACHERS, SCHEDULES, NOTICES, MORE }
 @Composable
 fun DirectorApp(currentTheme: AgendaThemeStyle, onThemeChange: (AgendaThemeStyle) -> Unit) {
     var section by remember { mutableStateOf(DirectorSection.HOME) }
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(section == DirectorSection.HOME, { section = DirectorSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") })
-                NavigationBarItem(section == DirectorSection.TEACHERS, { section = DirectorSection.TEACHERS }, { Icon(Icons.Default.Badge, null) }, label = { Text("Docentes") })
-                NavigationBarItem(section == DirectorSection.SCHEDULES, { section = DirectorSection.SCHEDULES }, { Icon(Icons.Default.CalendarMonth, null) }, label = { Text("Horarios") })
-                NavigationBarItem(section == DirectorSection.NOTICES, { section = DirectorSection.NOTICES }, { Icon(Icons.Default.Notifications, null) }, label = { Text("Avisos") })
-                NavigationBarItem(section == DirectorSection.MORE, { section = DirectorSection.MORE }, { Icon(Icons.Default.MoreHoriz, null) }, label = { Text("Más") })
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val expandedNavigation = maxWidth >= 700.dp
+        Row(Modifier.fillMaxSize()) {
+            if (expandedNavigation) {
+                NavigationRail {
+                    Spacer(Modifier.height(8.dp))
+                    NavigationRailItem(section == DirectorSection.HOME, { section = DirectorSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") })
+                    NavigationRailItem(section == DirectorSection.TEACHERS, { section = DirectorSection.TEACHERS }, { Icon(Icons.Default.Badge, null) }, label = { Text("Docentes") })
+                    NavigationRailItem(section == DirectorSection.SCHEDULES, { section = DirectorSection.SCHEDULES }, { Icon(Icons.Default.CalendarMonth, null) }, label = { Text("Horarios") })
+                    NavigationRailItem(section == DirectorSection.NOTICES, { section = DirectorSection.NOTICES }, { Icon(Icons.Default.Notifications, null) }, label = { Text("Avisos") })
+                    NavigationRailItem(section == DirectorSection.MORE, { section = DirectorSection.MORE }, { Icon(Icons.Default.MoreHoriz, null) }, label = { Text("Más") })
+                }
             }
-        }
-    ) { padding ->
-        Box(Modifier.padding(padding)) {
-            when (section) {
-                DirectorSection.HOME -> DashboardScreen()
-                DirectorSection.TEACHERS -> TeachersScreen()
-                DirectorSection.SCHEDULES -> ScheduleBuilderScreen()
-                DirectorSection.NOTICES -> DirectorNoticesScreen()
-                DirectorSection.MORE -> MoreScreen(currentTheme, onThemeChange)
+
+            Scaffold(
+                modifier = Modifier.weight(1f),
+                containerColor = MaterialTheme.colorScheme.background,
+                bottomBar = {
+                    if (!expandedNavigation) {
+                        NavigationBar {
+                            NavigationBarItem(section == DirectorSection.HOME, { section = DirectorSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") })
+                            NavigationBarItem(section == DirectorSection.TEACHERS, { section = DirectorSection.TEACHERS }, { Icon(Icons.Default.Badge, null) }, label = { Text("Docentes") })
+                            NavigationBarItem(section == DirectorSection.SCHEDULES, { section = DirectorSection.SCHEDULES }, { Icon(Icons.Default.CalendarMonth, null) }, label = { Text("Horarios") })
+                            NavigationBarItem(section == DirectorSection.NOTICES, { section = DirectorSection.NOTICES }, { Icon(Icons.Default.Notifications, null) }, label = { Text("Avisos") })
+                            NavigationBarItem(section == DirectorSection.MORE, { section = DirectorSection.MORE }, { Icon(Icons.Default.MoreHoriz, null) }, label = { Text("Más") })
+                        }
+                    }
+                }
+            ) { padding ->
+                Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                    Box(Modifier.fillMaxSize().widthIn(max = 1200.dp)) {
+                        when (section) {
+                            DirectorSection.HOME -> DashboardScreen()
+                            DirectorSection.TEACHERS -> TeachersScreen()
+                            DirectorSection.SCHEDULES -> ScheduleBuilderScreen()
+                            DirectorSection.NOTICES -> DirectorNoticesScreen()
+                            DirectorSection.MORE -> MoreScreen(currentTheme, onThemeChange)
+                        }
+                    }
+                }
             }
         }
     }
@@ -75,15 +97,17 @@ private fun DashboardScreen() {
             Text("Misma familia visual de La Carpeta del Docente")
         }
         item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MetricCard("15", "Docentes", Modifier.weight(1f))
-                MetricCard("8", "Grupos", Modifier.weight(1f))
-            }
-        }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MetricCard("42", "Módulos", Modifier.weight(1f))
-                MetricCard("92%", "Cobertura", Modifier.weight(1f))
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val columns = if (maxWidth < 600.dp) 2 else 4
+                val metrics = listOf("15" to "Docentes", "8" to "Grupos", "42" to "Módulos", "92%" to "Cobertura")
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    metrics.chunked(columns).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            row.forEach { (value, label) -> MetricCard(value, label, Modifier.weight(1f)) }
+                            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
             }
         }
         item {
@@ -92,6 +116,17 @@ private fun DashboardScreen() {
                     Text("Prioridad: horarios", fontWeight = FontWeight.Bold)
                     Text("Construye la semana usando disponibilidad docente, materias, grupos, duración de módulo y horas requeridas.")
                     Text("⚠ Detecta doble asignación de docente, choque de grupo y horas sin cubrir.")
+                }
+            }
+        }
+        item {
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Incidencias", fontWeight = FontWeight.Bold)
+                    Text("• 1 conflicto de horario por revisar")
+                    Text("• 3 módulos pendientes de cubrir")
+                    Text("• 2 docentes con carga menor a la planeada")
+                    Text("La vista se mantiene a nivel de docentes, grupos y horarios; no muestra estudiantes individuales.")
                 }
             }
         }
@@ -157,9 +192,21 @@ private fun ScheduleBuilderScreen() {
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Parámetros institucionales", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(moduleMinutes, { moduleMinutes = it.filter(Char::isDigit).take(3) }, label = { Text("Minutos por módulo") }, singleLine = true)
-                    OutlinedTextField(schoolStart, { schoolStart = it.take(5) }, label = { Text("Entrada") }, singleLine = true)
-                    OutlinedTextField(schoolEnd, { schoolEnd = it.take(5) }, label = { Text("Salida") }, singleLine = true)
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        if (maxWidth < 600.dp) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(moduleMinutes, { moduleMinutes = it.filter(Char::isDigit).take(3) }, label = { Text("Minutos por módulo") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(schoolStart, { schoolStart = it.take(5) }, label = { Text("Entrada") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(schoolEnd, { schoolEnd = it.take(5) }, label = { Text("Salida") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            }
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(moduleMinutes, { moduleMinutes = it.filter(Char::isDigit).take(3) }, label = { Text("Minutos por módulo") }, singleLine = true, modifier = Modifier.weight(1f))
+                                OutlinedTextField(schoolStart, { schoolStart = it.take(5) }, label = { Text("Entrada") }, singleLine = true, modifier = Modifier.weight(1f))
+                                OutlinedTextField(schoolEnd, { schoolEnd = it.take(5) }, label = { Text("Salida") }, singleLine = true, modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
                     Button(onClick = { generated = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.AutoAwesome, null)
                         Spacer(Modifier.width(8.dp))
