@@ -26,7 +26,7 @@ fun OnlineAttendanceOverview(
         )
     }
     var loading by remember { mutableStateOf(false) }
-    var message by remember<String?> { mutableStateOf(if (rows.isNotEmpty()) "Datos guardados disponibles sin conexión" else null) }
+    var message by remember { mutableStateOf<String?>(if (rows.isNotEmpty()) "Datos guardados disponibles sin conexión" else null) }
 
     fun refresh() {
         scope.launch {
