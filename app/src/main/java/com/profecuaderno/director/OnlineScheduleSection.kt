@@ -3,6 +3,7 @@ package com.profecuaderno.director
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -87,7 +88,7 @@ fun OnlineScheduleSection(
             }
         }
         Text(
-            "Los módulos guardados aquí quedan en el servidor. El backend impide choques del mismo docente y de la misma aula.",
+            "Los módulos guardados aquí quedan en el servidor. El backend impide choques de docente, grupo y aula.",
             style = MaterialTheme.typography.bodySmall,
         )
 
@@ -248,10 +249,32 @@ fun OnlineScheduleSection(
                 val classroom = classes.firstOrNull { it.id == row.classId }
                 ElevatedCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(
-                            "${weekdayNames[row.weekday] ?: "Día ${row.weekday}"} · ${row.startTime}–${row.endTime}",
-                            fontWeight = FontWeight.Bold,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "${weekdayNames[row.weekday] ?: "Día ${row.weekday}"} · ${row.startTime}–${row.endTime}",
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        loading = true
+                                        runCatching { backend.api.deleteSchedule(row.id) }
+                                            .onSuccess {
+                                                schedule = backend.api.schedule().sortedWith(
+                                                    compareBy<ScheduleDto> { item -> item.weekday }.thenBy { item -> item.startTime }
+                                                )
+                                                message = "Módulo eliminado"
+                                            }
+                                            .onFailure { message = it.message ?: "No se pudo eliminar el módulo" }
+                                        loading = false
+                                    }
+                                },
+                                enabled = !loading,
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Eliminar módulo")
+                            }
+                        }
                         Text(classroom?.let { "${it.name} · ${it.subject.ifBlank { it.name }}" } ?: "Clase no vinculada")
                         Text(
                             "Docente: ${teacher?.fullName?.ifBlank { teacher.email } ?: row.teacherId.toString()}" +
