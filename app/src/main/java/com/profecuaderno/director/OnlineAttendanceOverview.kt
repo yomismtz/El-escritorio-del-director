@@ -15,11 +15,18 @@ import com.profecuaderno.director.network.InstitutionalAttendanceSummaryDto
 import kotlinx.coroutines.launch
 
 @Composable
-fun OnlineAttendanceOverview(backend: CentralBackend) {
+fun OnlineAttendanceOverview(
+    backend: CentralBackend,
+    offline: DirectorOfflineStore,
+) {
     val scope = rememberCoroutineScope()
-    var rows by remember { mutableStateOf<List<InstitutionalAttendanceSummaryDto>>(emptyList()) }
+    var rows by remember {
+        mutableStateOf<List<InstitutionalAttendanceSummaryDto>>(
+            offline.loadAttendance().sortedBy { it.className.lowercase() }
+        )
+    }
     var loading by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var message by remember<String?> { mutableStateOf(if (rows.isNotEmpty()) "Datos guardados disponibles sin conexión" else null) }
 
     fun refresh() {
         scope.launch {
@@ -27,9 +34,16 @@ fun OnlineAttendanceOverview(backend: CentralBackend) {
             runCatching { backend.api.attendanceSummary() }
                 .onSuccess {
                     rows = it.sortedBy { row -> row.className.lowercase() }
+                    offline.saveAttendance(rows)
                     message = null
                 }
-                .onFailure { message = it.message ?: "No se pudo consultar el panorama de asistencia" }
+                .onFailure {
+                    message = if (rows.isNotEmpty()) {
+                        "Sin conexión: se muestra el último panorama guardado."
+                    } else {
+                        it.message ?: "No se pudo consultar el panorama de asistencia"
+                    }
+                }
             loading = false
         }
     }
@@ -52,7 +66,7 @@ fun OnlineAttendanceOverview(backend: CentralBackend) {
                 style = MaterialTheme.typography.bodySmall,
             )
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-            message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
 
             if (!loading && rows.isEmpty() && message == null) {
                 Text("Todavía no hay asistencias sincronizadas.")
