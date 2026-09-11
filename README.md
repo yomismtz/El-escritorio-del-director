@@ -2,6 +2,18 @@
 
 Aplicación Android para Dirección dentro del ecosistema online formado por **ProfeCuaderno**, **El Cuaderno del Estudiante** y **El Escritorio del Director**.
 
+## Descarga Android
+
+Página pública de Dirección:
+
+https://profecuaderno-api-production.up.railway.app/director
+
+Descarga directa del APK instalable más reciente:
+
+https://github.com/yomismtz/El-escritorio-del-director/releases/download/android-latest/El-Escritorio-del-Director.apk
+
+El APK publicado por este flujo es una compilación de prueba para instalación directa. Android puede solicitar autorización para instalar aplicaciones desde el navegador o gestor de archivos.
+
 ## Estado actual
 
 La aplicación ya trabaja con el backend central real. El rol Director puede:
@@ -30,10 +42,7 @@ Política de privacidad conjunta: https://profecuaderno-api-production.up.railwa
 
 ## Compilación
 
-El workflow `.github/workflows/build-apk.yml` ejecuta lint y genera artefactos de prueba en ambos formatos:
-
-- `app-debug.apk`
-- `app-debug.aab`
+El workflow `.github/workflows/build-apk.yml` ejecuta lint, genera APK/AAB de prueba y actualiza una descarga pública estable del APK cuando cambia `main`.
 
 ## Privacidad
 
