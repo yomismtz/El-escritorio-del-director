@@ -55,6 +55,16 @@ data class InstitutionRequest(val name: String)
 
 data class InstitutionDto(val id: Int, val name: String)
 
+data class NoticeRequest(val title: String, val body: String)
+
+data class DirectorNoticeDto(
+    val id: Int,
+    val title: String,
+    val body: String,
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("updated_at") val updatedAt: String? = null,
+)
+
 data class ClassDto(
     val id: Int,
     val name: String,
@@ -79,11 +89,23 @@ interface DirectorCentralApi {
     @GET("me")
     suspend fun me(): UserDto
 
+    @GET("institution")
+    suspend fun institution(): InstitutionDto
+
     @POST("institutions")
     suspend fun createInstitution(@Body request: InstitutionRequest): InstitutionDto
 
     @POST("institutions/attach-teacher")
     suspend fun attachTeacher(@Query("email") email: String): UserDto
+
+    @GET("institutions/teachers")
+    suspend fun teachers(): List<UserDto>
+
+    @POST("institutions/notices")
+    suspend fun createDirectorNotice(@Body request: NoticeRequest): DirectorNoticeDto
+
+    @GET("institutions/notices")
+    suspend fun directorNotices(): List<DirectorNoticeDto>
 
     @GET("classes")
     suspend fun classes(): List<ClassDto>
