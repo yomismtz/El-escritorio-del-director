@@ -76,6 +76,25 @@ data class ClassDto(
     val active: Boolean
 )
 
+data class ScheduleRequest(
+    @SerializedName("teacher_id") val teacherId: Int,
+    @SerializedName("class_id") val classId: Int?,
+    val weekday: Int,
+    @SerializedName("start_time") val startTime: String,
+    @SerializedName("end_time") val endTime: String,
+    val room: String = "",
+)
+
+data class ScheduleDto(
+    val id: Int,
+    @SerializedName("teacher_id") val teacherId: Int,
+    @SerializedName("class_id") val classId: Int?,
+    val weekday: Int,
+    @SerializedName("start_time") val startTime: String,
+    @SerializedName("end_time") val endTime: String,
+    val room: String,
+)
+
 interface DirectorCentralApi {
     @GET("health")
     suspend fun health(): Map<String, String>
@@ -109,6 +128,12 @@ interface DirectorCentralApi {
 
     @GET("classes")
     suspend fun classes(): List<ClassDto>
+
+    @POST("schedule")
+    suspend fun createSchedule(@Body request: ScheduleRequest): ScheduleDto
+
+    @GET("schedule")
+    suspend fun schedule(): List<ScheduleDto>
 }
 
 class CentralBackend(context: Context) {
