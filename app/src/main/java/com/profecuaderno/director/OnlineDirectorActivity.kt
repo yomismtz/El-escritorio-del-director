@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,7 +22,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.profecuaderno.director.network.CentralBackend
 import com.profecuaderno.director.network.ClassDto
+import com.profecuaderno.director.network.DirectorNoticeDto
+import com.profecuaderno.director.network.InstitutionDto
 import com.profecuaderno.director.network.InstitutionRequest
+import com.profecuaderno.director.network.NoticeRequest
 import com.profecuaderno.director.network.UserDto
 import kotlinx.coroutines.launch
 
@@ -59,10 +63,14 @@ private fun OnlineDirectorScreen(
 ) {
     val scope = rememberCoroutineScope()
     var me by remember { mutableStateOf<UserDto?>(null) }
+    var institution by remember { mutableStateOf<InstitutionDto?>(null) }
+    var teachers by remember { mutableStateOf<List<UserDto>>(emptyList()) }
     var classes by remember { mutableStateOf<List<ClassDto>>(emptyList()) }
+    var notices by remember { mutableStateOf<List<DirectorNoticeDto>>(emptyList()) }
     var institutionName by remember { mutableStateOf("") }
     var teacherEmail by remember { mutableStateOf("") }
-    var lastAttachedTeacher by remember { mutableStateOf<UserDto?>(null) }
+    var noticeTitle by remember { mutableStateOf("") }
+    var noticeBody by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("Conectando con ProfeCuaderno Online…") }
 
@@ -71,11 +79,23 @@ private fun OnlineDirectorScreen(
             loading = true
             runCatching {
                 val current = backend.api.me()
-                val serverClasses = backend.api.classes()
-                current to serverClasses
-            }.onSuccess { (current, serverClasses) ->
-                me = current
-                classes = serverClasses
+                if (current.institutionId == null) {
+                    InstitutionalSnapshot(current, null, emptyList(), emptyList(), emptyList())
+                } else {
+                    InstitutionalSnapshot(
+                        current = current,
+                        institution = backend.api.institution(),
+                        teachers = backend.api.teachers(),
+                        classes = backend.api.classes(),
+                        notices = backend.api.directorNotices(),
+                    )
+                }
+            }.onSuccess { snapshot ->
+                me = snapshot.current
+                institution = snapshot.institution
+                teachers = snapshot.teachers
+                classes = snapshot.classes
+                notices = snapshot.notices
                 message = "Datos institucionales actualizados"
             }.onFailure { error ->
                 message = error.message ?: "No se pudo consultar el servidor"
@@ -119,7 +139,7 @@ private fun OnlineDirectorScreen(
                             Text(director.fullName.ifBlank { director.email })
                             Text(director.email, style = MaterialTheme.typography.bodySmall)
                             Text(
-                                if (director.institutionId == null) "Sin institución creada" else "Institución #${director.institutionId}",
+                                institution?.name ?: if (director.institutionId == null) "Sin institución creada" else "Institución vinculada",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -149,8 +169,8 @@ private fun OnlineDirectorScreen(
                                     scope.launch {
                                         loading = true
                                         runCatching { backend.api.createInstitution(InstitutionRequest(institutionName.trim())) }
-                                            .onSuccess { institution ->
-                                                message = "Institución creada: ${institution.name}"
+                                            .onSuccess { created ->
+                                                message = "Institución creada: ${created.name}"
                                                 institutionName = ""
                                                 refresh()
                                             }
@@ -159,6 +179,7 @@ private fun OnlineDirectorScreen(
                                     }
                                 },
                                 enabled = institutionName.trim().length >= 2 && !loading,
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Text("Crear y vincular a mi cuenta")
                             }
@@ -188,9 +209,8 @@ private fun OnlineDirectorScreen(
                                         loading = true
                                         runCatching { backend.api.attachTeacher(teacherEmail.trim()) }
                                             .onSuccess { teacher ->
-                                                lastAttachedTeacher = teacher
                                                 teacherEmail = ""
-                                                message = "Docente vinculado correctamente"
+                                                message = "Docente vinculado: ${teacher.fullName.ifBlank { teacher.email }}"
                                                 refresh()
                                             }
                                             .onFailure { message = it.message ?: "No se pudo vincular al docente" }
@@ -198,11 +218,90 @@ private fun OnlineDirectorScreen(
                                     }
                                 },
                                 enabled = teacherEmail.contains("@") && !loading,
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Text("Vincular docente")
                             }
-                            lastAttachedTeacher?.let { teacher ->
-                                Text("Último docente vinculado: ${teacher.fullName} · ${teacher.email}")
+                        }
+                    }
+                }
+
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Badge, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Docentes vinculados", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (teachers.isEmpty()) {
+                    item { Text("Todavía no hay docentes vinculados a esta institución.") }
+                } else {
+                    items(teachers, key = { "teacher-${it.id}" }) { teacher ->
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(teacher.fullName.ifBlank { teacher.email }, fontWeight = FontWeight.Bold)
+                                Text(teacher.email, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    ElevatedCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Notifications, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Aviso para docentes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Text("Este canal es institucional: los estudiantes no reciben estos avisos.")
+                            OutlinedTextField(
+                                value = noticeTitle,
+                                onValueChange = { noticeTitle = it },
+                                label = { Text("Título") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                            )
+                            OutlinedTextField(
+                                value = noticeBody,
+                                onValueChange = { noticeBody = it },
+                                label = { Text("Mensaje") },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 3,
+                            )
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        loading = true
+                                        runCatching {
+                                            backend.api.createDirectorNotice(NoticeRequest(noticeTitle.trim(), noticeBody.trim()))
+                                        }.onSuccess {
+                                            noticeTitle = ""
+                                            noticeBody = ""
+                                            message = "Aviso enviado a los docentes de la institución"
+                                            refresh()
+                                        }.onFailure {
+                                            message = it.message ?: "No se pudo enviar el aviso"
+                                        }
+                                        loading = false
+                                    }
+                                },
+                                enabled = noticeTitle.isNotBlank() && noticeBody.isNotBlank() && !loading,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Publicar aviso institucional")
+                            }
+                        }
+                    }
+                }
+
+                if (notices.isNotEmpty()) {
+                    item { Text("Avisos institucionales recientes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                    items(notices, key = { "notice-${it.id}" }) { notice ->
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(notice.title, fontWeight = FontWeight.Bold)
+                                Text(notice.body)
                             }
                         }
                     }
@@ -210,7 +309,6 @@ private fun OnlineDirectorScreen(
             }
 
             item {
-                val distinctTeachers = classes.map { it.teacherId }.distinct().size
                 ElevatedCard(Modifier.fillMaxWidth()) {
                     Row(
                         Modifier.fillMaxWidth().padding(16.dp),
@@ -221,8 +319,8 @@ private fun OnlineDirectorScreen(
                             Text("Grupos online")
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(distinctTeachers.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                            Text("Docentes con grupos")
+                            Text(teachers.size.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                            Text("Docentes vinculados")
                         }
                     }
                 }
@@ -243,13 +341,17 @@ private fun OnlineDirectorScreen(
                     )
                 }
             } else {
-                items(classes, key = { it.id }) { classroom ->
+                items(classes, key = { "class-${it.id}" }) { classroom ->
+                    val teacher = teachers.firstOrNull { it.id == classroom.teacherId }
                     ElevatedCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(classroom.name, fontWeight = FontWeight.Bold)
                             Text(classroom.subject.ifBlank { "Sin materia" })
                             Text("Periodo: ${classroom.periodName.ifBlank { "Sin periodo" }}", style = MaterialTheme.typography.bodySmall)
-                            Text("Docente #${classroom.teacherId} · Código ${classroom.classCode}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "Docente: ${teacher?.fullName?.ifBlank { teacher.email } ?: classroom.teacherId.toString()} · Código ${classroom.classCode}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
                     }
                 }
@@ -257,10 +359,18 @@ private fun OnlineDirectorScreen(
 
             item {
                 Text(
-                    "Privacidad: Dirección trabaja con institución, docentes y grupos. Esta pantalla no solicita calificaciones ni asistencias individuales de estudiantes.",
+                    "Privacidad: Dirección trabaja con institución, docentes, grupos, horarios y avisos institucionales. No consulta listas individuales de alumnos, calificaciones, asistencias ni coevaluaciones.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
     }
 }
+
+private data class InstitutionalSnapshot(
+    val current: UserDto,
+    val institution: InstitutionDto?,
+    val teachers: List<UserDto>,
+    val classes: List<ClassDto>,
+    val notices: List<DirectorNoticeDto>,
+)
