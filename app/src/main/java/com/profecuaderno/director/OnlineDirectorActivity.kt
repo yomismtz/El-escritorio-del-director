@@ -357,6 +357,16 @@ private fun OnlineDirectorScreen(
                 }
             }
 
+            if (me?.institutionId != null) {
+                item {
+                    OnlineScheduleSection(
+                        backend = backend,
+                        teachers = teachers,
+                        classes = classes,
+                    )
+                }
+            }
+
             item {
                 Text(
                     "Privacidad: Dirección trabaja con institución, docentes, grupos, horarios y avisos institucionales. No consulta listas individuales de alumnos, calificaciones, asistencias ni coevaluaciones.",
