@@ -32,11 +32,16 @@ private val weekdayNames = mapOf(
 @Composable
 fun OnlineScheduleSection(
     backend: CentralBackend,
+    offline: DirectorOfflineStore,
     teachers: List<UserDto>,
     classes: List<ClassDto>,
 ) {
     val scope = rememberCoroutineScope()
-    var schedule by remember { mutableStateOf<List<ScheduleDto>>(emptyList()) }
+    var schedule by remember {
+        mutableStateOf(
+            offline.loadSchedule().sortedWith(compareBy<ScheduleDto> { it.weekday }.thenBy { it.startTime })
+        )
+    }
     var selectedTeacherId by remember { mutableStateOf<Int?>(null) }
     var selectedClassId by remember { mutableStateOf<Int?>(null) }
     var selectedWeekday by remember { mutableIntStateOf(1) }
@@ -47,21 +52,33 @@ fun OnlineScheduleSection(
     var classMenu by remember { mutableStateOf(false) }
     var dayMenu by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var message by remember<String?> { mutableStateOf(if (schedule.isNotEmpty()) "Horario guardado disponible sin conexión" else null) }
 
     val selectedTeacher = teachers.firstOrNull { it.id == selectedTeacherId }
     val teacherClasses = classes.filter { selectedTeacherId == null || it.teacherId == selectedTeacherId }
     val selectedClass = classes.firstOrNull { it.id == selectedClassId }
 
+    fun saveScheduleCache(items: List<ScheduleDto>) {
+        schedule = items.sortedWith(compareBy<ScheduleDto> { it.weekday }.thenBy { it.startTime })
+        offline.saveSchedule(schedule)
+    }
+
     fun refreshSchedule() {
         scope.launch {
             loading = true
+            offline.flush(backend)
             runCatching { backend.api.schedule() }
                 .onSuccess {
-                    schedule = it.sortedWith(compareBy<ScheduleDto> { row -> row.weekday }.thenBy { row -> row.startTime })
+                    saveScheduleCache(it)
                     message = null
                 }
-                .onFailure { message = it.message ?: "No se pudo consultar el horario" }
+                .onFailure {
+                    message = if (schedule.isNotEmpty()) {
+                        "Sin conexión: se muestra el último horario guardado."
+                    } else {
+                        it.message ?: "No se pudo consultar el horario"
+                    }
+                }
             loading = false
         }
     }
@@ -81,14 +98,14 @@ fun OnlineScheduleSection(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.CalendarMonth, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Horario institucional online", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Horario institucional", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             IconButton(onClick = ::refreshSchedule, enabled = !loading) {
                 Icon(Icons.Default.Refresh, contentDescription = "Actualizar horario")
             }
         }
         Text(
-            "Los módulos guardados aquí quedan en el servidor. El backend impide choques de docente, grupo y aula.",
+            "Puedes consultar el último horario sin conexión. Los cambios hechos sin internet quedan pendientes y se envían automáticamente cuando regrese la red.",
             style = MaterialTheme.typography.bodySmall,
         )
 
@@ -96,10 +113,7 @@ fun OnlineScheduleSection(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Agregar módulo", fontWeight = FontWeight.Bold)
 
-                ExposedDropdownMenuBox(
-                    expanded = teacherMenu,
-                    onExpandedChange = { teacherMenu = !teacherMenu },
-                ) {
+                ExposedDropdownMenuBox(expanded = teacherMenu, onExpandedChange = { teacherMenu = !teacherMenu }) {
                     OutlinedTextField(
                         value = selectedTeacher?.let { it.fullName.ifBlank { it.email } }.orEmpty(),
                         onValueChange = {},
@@ -148,10 +162,7 @@ fun OnlineScheduleSection(
                     }
                 }
 
-                ExposedDropdownMenuBox(
-                    expanded = dayMenu,
-                    onExpandedChange = { dayMenu = !dayMenu },
-                ) {
+                ExposedDropdownMenuBox(expanded = dayMenu, onExpandedChange = { dayMenu = !dayMenu }) {
                     OutlinedTextField(
                         value = weekdayNames[selectedWeekday].orEmpty(),
                         onValueChange = {},
@@ -205,44 +216,45 @@ fun OnlineScheduleSection(
                     onClick = {
                         val teacherId = selectedTeacherId ?: return@Button
                         val classId = selectedClassId ?: return@Button
+                        val request = ScheduleRequest(
+                            teacherId = teacherId,
+                            classId = classId,
+                            weekday = selectedWeekday,
+                            startTime = startTime,
+                            endTime = endTime,
+                            room = room.trim(),
+                        )
                         scope.launch {
                             loading = true
-                            runCatching {
-                                backend.api.createSchedule(
-                                    ScheduleRequest(
-                                        teacherId = teacherId,
-                                        classId = classId,
-                                        weekday = selectedWeekday,
-                                        startTime = startTime,
-                                        endTime = endTime,
-                                        room = room.trim(),
-                                    )
-                                )
-                            }.onSuccess {
-                                message = "Módulo guardado en el horario online"
-                                room = ""
-                                schedule = backend.api.schedule().sortedWith(
-                                    compareBy<ScheduleDto> { row -> row.weekday }.thenBy { row -> row.startTime }
-                                )
-                            }.onFailure {
-                                message = it.message ?: "No se pudo guardar el módulo; revisa si hay un choque de horario"
-                            }
+                            runCatching { offline.createScheduleOrQueue(backend, request) }
+                                .onSuccess { (result, created) ->
+                                    room = ""
+                                    if (result == DirectorOfflineWriteResult.SENT && created != null) {
+                                        saveScheduleCache(schedule.filterNot { it.id == created.id } + created)
+                                        message = "Módulo guardado en el horario"
+                                    } else {
+                                        message = "Sin conexión: el módulo quedó guardado y se añadirá al servidor automáticamente."
+                                    }
+                                }
+                                .onFailure { message = it.message ?: "No se pudo guardar el módulo; revisa si hay un choque de horario" }
                             loading = false
                         }
                     },
                     enabled = canSave,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Guardar módulo")
-                }
+                ) { Text("Guardar módulo") }
+
                 message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+                if (offline.pendingCount() > 0) {
+                    Text("Cambios pendientes de sincronizar: ${offline.pendingCount()}", style = MaterialTheme.typography.bodySmall)
+                }
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
         }
 
         Text("Horario guardado (${schedule.size})", fontWeight = FontWeight.Bold)
         if (schedule.isEmpty()) {
-            Text("Todavía no hay módulos en el horario online.")
+            Text("Todavía no hay módulos guardados.")
         } else {
             schedule.forEach { row ->
                 val teacher = teachers.firstOrNull { it.id == row.teacherId }
@@ -259,12 +271,14 @@ fun OnlineScheduleSection(
                                 onClick = {
                                     scope.launch {
                                         loading = true
-                                        runCatching { backend.api.deleteSchedule(row.id) }
-                                            .onSuccess {
-                                                schedule = backend.api.schedule().sortedWith(
-                                                    compareBy<ScheduleDto> { item -> item.weekday }.thenBy { item -> item.startTime }
-                                                )
-                                                message = "Módulo eliminado"
+                                        runCatching { offline.deleteScheduleOrQueue(backend, row.id) }
+                                            .onSuccess { result ->
+                                                saveScheduleCache(schedule.filterNot { it.id == row.id })
+                                                message = if (result == DirectorOfflineWriteResult.SENT) {
+                                                    "Módulo eliminado"
+                                                } else {
+                                                    "Sin conexión: la eliminación quedó guardada y se aplicará automáticamente."
+                                                }
                                             }
                                             .onFailure { message = it.message ?: "No se pudo eliminar el módulo" }
                                         loading = false
