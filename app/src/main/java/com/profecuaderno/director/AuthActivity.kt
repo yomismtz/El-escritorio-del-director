@@ -33,7 +33,7 @@ class AuthActivity : ComponentActivity() {
     }
 
     private fun openDirector() {
-        startActivity(Intent(this, MainActivity::class.java))
+        startActivity(Intent(this, OnlineDirectorActivity::class.java))
         finish()
     }
 }
