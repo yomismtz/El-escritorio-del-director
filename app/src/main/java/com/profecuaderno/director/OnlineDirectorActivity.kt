@@ -1,5 +1,8 @@
 package com.profecuaderno.director
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,14 +21,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.profecuaderno.director.network.CentralBackend
 import com.profecuaderno.director.network.ClassDto
 import com.profecuaderno.director.network.DirectorNoticeDto
 import com.profecuaderno.director.network.InstitutionDto
-import com.profecuaderno.director.network.InstitutionRequest
-import com.profecuaderno.director.network.NoticeRequest
 import com.profecuaderno.director.network.UserDto
 import kotlinx.coroutines.launch
 
@@ -34,6 +36,8 @@ class OnlineDirectorActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val backend = CentralBackend(this)
         val prefs = getSharedPreferences("director_ui", MODE_PRIVATE)
+        DirectorSyncScheduler.ensurePeriodic(this)
+        DirectorSyncScheduler.enqueueNow(this)
         setContent {
             val appLanguage = remember { AppLanguagePrefs.load(this@OnlineDirectorActivity) }
             val theme = remember {
@@ -61,22 +65,31 @@ private fun OnlineDirectorScreen(
     backend: CentralBackend,
     onSignOut: () -> Unit,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var me by remember { mutableStateOf<UserDto?>(null) }
-    var institution by remember { mutableStateOf<InstitutionDto?>(null) }
-    var teachers by remember { mutableStateOf<List<UserDto>>(emptyList()) }
-    var classes by remember { mutableStateOf<List<ClassDto>>(emptyList()) }
-    var notices by remember { mutableStateOf<List<DirectorNoticeDto>>(emptyList()) }
+    val offline = remember { DirectorOfflineStore(context) }
+    val cached = remember { offline.loadCore() }
+    var me by remember { mutableStateOf(cached?.current) }
+    var institution by remember { mutableStateOf(cached?.institution) }
+    var teachers by remember { mutableStateOf(cached?.teachers.orEmpty()) }
+    var classes by remember { mutableStateOf(cached?.classes.orEmpty()) }
+    var notices by remember { mutableStateOf(cached?.notices.orEmpty()) }
     var institutionName by remember { mutableStateOf("") }
     var teacherEmail by remember { mutableStateOf("") }
     var noticeTitle by remember { mutableStateOf("") }
     var noticeBody by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("Conectando con ProfeCuaderno Online…") }
+    var message by remember {
+        mutableStateOf(
+            if (cached != null) "Mostrando datos guardados; comprobando conexión…"
+            else "Conectando con ProfeCuaderno Online…"
+        )
+    }
 
     fun refresh() {
         scope.launch {
             loading = true
+            offline.flush(backend)
             runCatching {
                 val current = backend.api.me()
                 if (current.institutionId == null) {
@@ -96,15 +109,43 @@ private fun OnlineDirectorScreen(
                 teachers = snapshot.teachers
                 classes = snapshot.classes
                 notices = snapshot.notices
-                message = "Datos institucionales actualizados"
+                offline.saveCore(
+                    DirectorCoreCache(
+                        current = snapshot.current,
+                        institution = snapshot.institution,
+                        teachers = snapshot.teachers,
+                        classes = snapshot.classes,
+                        notices = snapshot.notices,
+                    )
+                )
+                message = if (offline.pendingCount() == 0) {
+                    "Datos institucionales actualizados"
+                } else {
+                    "Datos actualizados · ${offline.pendingCount()} cambio(s) pendiente(s) de sincronizar"
+                }
             }.onFailure { error ->
-                message = error.message ?: "No se pudo consultar el servidor"
+                message = if (offline.loadCore() != null) {
+                    "Sin conexión: puedes seguir consultando los últimos datos guardados. Los cambios pendientes se enviarán al volver internet."
+                } else {
+                    error.message ?: "No se pudo consultar el servidor"
+                }
             }
             loading = false
         }
     }
 
     LaunchedEffect(Unit) { refresh() }
+
+    DisposableEffect(Unit) {
+        val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                refresh()
+            }
+        }
+        runCatching { connectivity.registerDefaultNetworkCallback(callback) }
+        onDispose { runCatching { connectivity.unregisterNetworkCallback(callback) } }
+    }
 
     Scaffold(
         topBar = {
@@ -143,6 +184,8 @@ private fun OnlineDirectorScreen(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
+                        val pending = offline.pendingCount()
+                        if (pending > 0) Text("Cambios guardados sin enviar: $pending", style = MaterialTheme.typography.bodySmall)
                         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                     }
                 }
@@ -166,23 +209,26 @@ private fun OnlineDirectorScreen(
                             )
                             Button(
                                 onClick = {
+                                    val name = institutionName.trim()
                                     scope.launch {
                                         loading = true
-                                        runCatching { backend.api.createInstitution(InstitutionRequest(institutionName.trim())) }
-                                            .onSuccess { created ->
-                                                message = "Institución creada: ${created.name}"
+                                        runCatching { offline.createInstitutionOrQueue(backend, name) }
+                                            .onSuccess { (result, created) ->
                                                 institutionName = ""
-                                                refresh()
+                                                if (result == DirectorOfflineWriteResult.SENT && created != null) {
+                                                    message = "Institución creada: ${created.name}"
+                                                    refresh()
+                                                } else {
+                                                    message = "Sin conexión: la creación de la institución quedó guardada y se enviará automáticamente."
+                                                }
                                             }
-                                            .onFailure { message = it.message ?: "No se pudo crear la institución" }
+                                            .onFailure { message = it.message ?: "No se pudo guardar la institución" }
                                         loading = false
                                     }
                                 },
                                 enabled = institutionName.trim().length >= 2 && !loading,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Crear y vincular a mi cuenta")
-                            }
+                            ) { Text("Crear y vincular a mi cuenta") }
                         }
                     }
                 }
@@ -205,23 +251,26 @@ private fun OnlineDirectorScreen(
                             )
                             Button(
                                 onClick = {
+                                    val email = teacherEmail.trim()
                                     scope.launch {
                                         loading = true
-                                        runCatching { backend.api.attachTeacher(teacherEmail.trim()) }
-                                            .onSuccess { teacher ->
+                                        runCatching { offline.attachTeacherOrQueue(backend, email) }
+                                            .onSuccess { (result, teacher) ->
                                                 teacherEmail = ""
-                                                message = "Docente vinculado: ${teacher.fullName.ifBlank { teacher.email }}"
-                                                refresh()
+                                                if (result == DirectorOfflineWriteResult.SENT && teacher != null) {
+                                                    message = "Docente vinculado: ${teacher.fullName.ifBlank { teacher.email }}"
+                                                    refresh()
+                                                } else {
+                                                    message = "Sin conexión: la vinculación del docente quedó guardada para sincronizarse."
+                                                }
                                             }
-                                            .onFailure { message = it.message ?: "No se pudo vincular al docente" }
+                                            .onFailure { message = it.message ?: "No se pudo guardar la vinculación" }
                                         loading = false
                                     }
                                 },
                                 enabled = teacherEmail.contains("@") && !loading,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Vincular docente")
-                            }
+                            ) { Text("Vincular docente") }
                         }
                     }
                 }
@@ -271,26 +320,28 @@ private fun OnlineDirectorScreen(
                             )
                             Button(
                                 onClick = {
+                                    val title = noticeTitle.trim()
+                                    val body = noticeBody.trim()
                                     scope.launch {
                                         loading = true
-                                        runCatching {
-                                            backend.api.createDirectorNotice(NoticeRequest(noticeTitle.trim(), noticeBody.trim()))
-                                        }.onSuccess {
-                                            noticeTitle = ""
-                                            noticeBody = ""
-                                            message = "Aviso enviado a los docentes de la institución"
-                                            refresh()
-                                        }.onFailure {
-                                            message = it.message ?: "No se pudo enviar el aviso"
-                                        }
+                                        runCatching { offline.createNoticeOrQueue(backend, title, body) }
+                                            .onSuccess { (result, _) ->
+                                                noticeTitle = ""
+                                                noticeBody = ""
+                                                if (result == DirectorOfflineWriteResult.SENT) {
+                                                    message = "Aviso enviado a los docentes de la institución"
+                                                    refresh()
+                                                } else {
+                                                    message = "Sin conexión: el aviso quedó guardado y se enviará automáticamente."
+                                                }
+                                            }
+                                            .onFailure { message = it.message ?: "No se pudo guardar el aviso" }
                                         loading = false
                                     }
                                 },
                                 enabled = noticeTitle.isNotBlank() && noticeBody.isNotBlank() && !loading,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Publicar aviso institucional")
-                            }
+                            ) { Text("Publicar aviso institucional") }
                         }
                     }
                 }
@@ -310,10 +361,7 @@ private fun OnlineDirectorScreen(
 
             item {
                 ElevatedCard(Modifier.fillMaxWidth()) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
                             Text(classes.size.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                             Text("Grupos online")
@@ -336,9 +384,7 @@ private fun OnlineDirectorScreen(
 
             if (classes.isEmpty()) {
                 item {
-                    Text(
-                        if (me?.institutionId == null) "Crea una institución para comenzar." else "Todavía no hay grupos online vinculados a esta institución."
-                    )
+                    Text(if (me?.institutionId == null) "Crea una institución para comenzar." else "Todavía no hay grupos online vinculados a esta institución.")
                 }
             } else {
                 items(classes, key = { "class-${it.id}" }) { classroom ->
@@ -358,9 +404,11 @@ private fun OnlineDirectorScreen(
             }
 
             if (me?.institutionId != null) {
+                item { OnlineAttendanceOverview(backend = backend, offline = offline) }
                 item {
                     OnlineScheduleSection(
                         backend = backend,
+                        offline = offline,
                         teachers = teachers,
                         classes = classes,
                     )
@@ -369,7 +417,7 @@ private fun OnlineDirectorScreen(
 
             item {
                 Text(
-                    "Privacidad: Dirección trabaja con institución, docentes, grupos, horarios y avisos institucionales. No consulta listas individuales de alumnos, calificaciones, asistencias ni coevaluaciones.",
+                    "Privacidad: Dirección puede consultar información institucional y un panorama agregado de asistencia por grupo. No recibe nombres, matrículas, calificaciones, historiales individuales de asistencia ni coevaluaciones de estudiantes.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
