@@ -180,9 +180,7 @@ private fun OnlineDirectorScreen(
                                 },
                                 enabled = institutionName.trim().length >= 2 && !loading,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Crear y vincular a mi cuenta")
-                            }
+                            ) { Text("Crear y vincular a mi cuenta") }
                         }
                     }
                 }
@@ -219,9 +217,7 @@ private fun OnlineDirectorScreen(
                                 },
                                 enabled = teacherEmail.contains("@") && !loading,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Vincular docente")
-                            }
+                            ) { Text("Vincular docente") }
                         }
                     }
                 }
@@ -273,24 +269,20 @@ private fun OnlineDirectorScreen(
                                 onClick = {
                                     scope.launch {
                                         loading = true
-                                        runCatching {
-                                            backend.api.createDirectorNotice(NoticeRequest(noticeTitle.trim(), noticeBody.trim()))
-                                        }.onSuccess {
-                                            noticeTitle = ""
-                                            noticeBody = ""
-                                            message = "Aviso enviado a los docentes de la institución"
-                                            refresh()
-                                        }.onFailure {
-                                            message = it.message ?: "No se pudo enviar el aviso"
-                                        }
+                                        runCatching { backend.api.createDirectorNotice(NoticeRequest(noticeTitle.trim(), noticeBody.trim())) }
+                                            .onSuccess {
+                                                noticeTitle = ""
+                                                noticeBody = ""
+                                                message = "Aviso enviado a los docentes de la institución"
+                                                refresh()
+                                            }
+                                            .onFailure { message = it.message ?: "No se pudo enviar el aviso" }
                                         loading = false
                                     }
                                 },
                                 enabled = noticeTitle.isNotBlank() && noticeBody.isNotBlank() && !loading,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Publicar aviso institucional")
-                            }
+                            ) { Text("Publicar aviso institucional") }
                         }
                     }
                 }
@@ -310,10 +302,7 @@ private fun OnlineDirectorScreen(
 
             item {
                 ElevatedCard(Modifier.fillMaxWidth()) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
                             Text(classes.size.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                             Text("Grupos online")
@@ -336,9 +325,7 @@ private fun OnlineDirectorScreen(
 
             if (classes.isEmpty()) {
                 item {
-                    Text(
-                        if (me?.institutionId == null) "Crea una institución para comenzar." else "Todavía no hay grupos online vinculados a esta institución."
-                    )
+                    Text(if (me?.institutionId == null) "Crea una institución para comenzar." else "Todavía no hay grupos online vinculados a esta institución.")
                 }
             } else {
                 items(classes, key = { "class-${it.id}" }) { classroom ->
@@ -358,6 +345,7 @@ private fun OnlineDirectorScreen(
             }
 
             if (me?.institutionId != null) {
+                item { OnlineAttendanceOverview(backend = backend) }
                 item {
                     OnlineScheduleSection(
                         backend = backend,
@@ -369,7 +357,7 @@ private fun OnlineDirectorScreen(
 
             item {
                 Text(
-                    "Privacidad: Dirección trabaja con institución, docentes, grupos, horarios y avisos institucionales. No consulta listas individuales de alumnos, calificaciones, asistencias ni coevaluaciones.",
+                    "Privacidad: Dirección puede consultar información institucional y un panorama agregado de asistencia por grupo. No recibe nombres, matrículas, calificaciones, historiales individuales de asistencia ni coevaluaciones de estudiantes.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
