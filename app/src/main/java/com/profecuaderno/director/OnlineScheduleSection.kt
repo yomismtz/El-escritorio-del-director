@@ -125,7 +125,7 @@ fun OnlineScheduleSection(
                     ExposedDropdownMenu(expanded = teacherMenu, onDismissRequest = { teacherMenu = false }) {
                         teachers.forEach { teacher ->
                             DropdownMenuItem(
-                                text = { Text(teacher.fullName.ifBlank { it.email }) },
+                                text = { Text(teacher.fullName.ifBlank { teacher.email }) },
                                 onClick = {
                                     selectedTeacherId = teacher.id
                                     if (selectedClass?.teacherId != teacher.id) selectedClassId = null
