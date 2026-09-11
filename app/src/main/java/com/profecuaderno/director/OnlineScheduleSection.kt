@@ -52,7 +52,7 @@ fun OnlineScheduleSection(
     var classMenu by remember { mutableStateOf(false) }
     var dayMenu by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
-    var message by remember<String?> { mutableStateOf(if (schedule.isNotEmpty()) "Horario guardado disponible sin conexión" else null) }
+    var message by remember { mutableStateOf<String?>(if (schedule.isNotEmpty()) "Horario guardado disponible sin conexión" else null) }
 
     val selectedTeacher = teachers.firstOrNull { it.id == selectedTeacherId }
     val teacherClasses = classes.filter { selectedTeacherId == null || it.teacherId == selectedTeacherId }
@@ -125,7 +125,7 @@ fun OnlineScheduleSection(
                     ExposedDropdownMenu(expanded = teacherMenu, onDismissRequest = { teacherMenu = false }) {
                         teachers.forEach { teacher ->
                             DropdownMenuItem(
-                                text = { Text(teacher.fullName.ifBlank { teacher.email }) },
+                                text = { Text(teacher.fullName.ifBlank { it.email }) },
                                 onClick = {
                                     selectedTeacherId = teacher.id
                                     if (selectedClass?.teacherId != teacher.id) selectedClassId = null
